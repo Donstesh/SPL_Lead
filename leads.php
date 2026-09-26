@@ -254,6 +254,26 @@ function leads_page_url(int $targetPage): string
 
 /*
 |--------------------------------------------------------------------------
+| EXPORT URL HELPER
+|--------------------------------------------------------------------------
+|
+| Preserves all current filters when exporting.
+| The page parameter is removed — exports always cover the full filtered set.
+|
+*/
+
+function leads_export_url(string $format): string
+{
+    $params = $_GET;
+    unset($params['page']);
+    $params['format'] = $format;
+
+    return 'leads_export.php?' . http_build_query($params);
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | FILTER STATE
 |--------------------------------------------------------------------------
 */
@@ -394,6 +414,58 @@ require __DIR__ . '/includes/header.php';
             --bs-pagination-font-size: .85rem;
         }
     }
+
+    /*
+     * Print styles: hides everything except the leads table.
+     */
+    @media print {
+
+        .sidebar,
+        .mobile-topbar,
+        .sidebar-backdrop,
+        .leads-header,
+        .filter-card,
+        .pagination,
+        .export-bar,
+        .leads-cards-mobile,
+        .btn {
+            display: none !important;
+        }
+
+        body {
+            background: #fff !important;
+        }
+
+        main {
+            padding: 0 !important;
+        }
+
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+        }
+
+        .card-header {
+            background: #f3f4f6 !important;
+        }
+
+        .table {
+            font-size: 11px;
+        }
+
+        .table th,
+        .table td {
+            padding: 4px 6px;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+    }
 </style>
 
 
@@ -426,6 +498,47 @@ require __DIR__ . '/includes/header.php';
         </a>
 
     </div>
+
+</div>
+
+
+<!-- EXPORT BAR -->
+
+<div class="export-bar d-flex flex-wrap gap-2 mb-3 align-items-center">
+
+    <span class="text-muted small me-1">Export:</span>
+
+    <a
+        href="<?= e(leads_export_url('csv')) ?>"
+        class="btn btn-sm btn-outline-dark"
+    >
+        CSV
+    </a>
+
+    <a
+        href="<?= e(leads_export_url('excel')) ?>"
+        class="btn btn-sm btn-outline-dark"
+    >
+        Excel
+    </a>
+
+    <button
+        type="button"
+        onclick="window.print()"
+        class="btn btn-sm btn-outline-dark"
+    >
+        Print
+    </button>
+
+    <?php if ($hasActiveFilters): ?>
+
+        <span class="text-muted small ms-auto">
+
+            Exporting <?= number_format($totalRows) ?> filtered lead<?= $totalRows === 1 ? '' : 's' ?>
+
+        </span>
+
+    <?php endif; ?>
 
 </div>
 

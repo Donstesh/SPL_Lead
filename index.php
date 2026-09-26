@@ -80,6 +80,22 @@ function page_url(int $targetPage): string
     return 'index.php?' . http_build_query($params);
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| EXPORT URL HELPER
+|--------------------------------------------------------------------------
+|
+| Links to the leads export with the same format the user picked.
+| Always exports the full filtered lead set from leads_export.php.
+|
+*/
+
+function export_url(string $format): string
+{
+    return 'leads_export.php?format=' . urlencode($format);
+}
+
 require __DIR__ . '/includes/header.php';
 ?>
 
@@ -132,6 +148,57 @@ require __DIR__ . '/includes/header.php';
             --bs-pagination-font-size: .85rem;
         }
     }
+
+    /*
+     * Print styles: hides navigation, buttons, filters, and pagination.
+     * Keeps the dashboard metrics and recent leads table.
+     */
+    @media print {
+
+        .sidebar,
+        .mobile-topbar,
+        .sidebar-backdrop,
+        .dash-header,
+        .export-bar,
+        .pagination,
+        .btn {
+            display: none !important;
+        }
+
+        body {
+            background: #fff !important;
+        }
+
+        main {
+            padding: 0 !important;
+        }
+
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+        }
+
+        .card-header {
+            background: #f3f4f6 !important;
+        }
+
+        .table {
+            font-size: 11px;
+        }
+
+        .table th,
+        .table td {
+            padding: 4px 6px;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+    }
 </style>
 
 
@@ -143,6 +210,41 @@ require __DIR__ . '/includes/header.php';
         </div>
     </div>
     <a href="search.php" class="btn btn-dark">Find Leads</a>
+</div>
+
+
+<!-- EXPORT BAR -->
+
+<div class="export-bar d-flex flex-wrap gap-2 mb-3 align-items-center">
+
+    <span class="text-muted small me-1">Export:</span>
+
+    <a
+        href="<?= e(export_url('csv')) ?>"
+        class="btn btn-sm btn-outline-dark"
+    >
+        CSV
+    </a>
+
+    <a
+        href="<?= e(export_url('excel')) ?>"
+        class="btn btn-sm btn-outline-dark"
+    >
+        Excel
+    </a>
+
+    <button
+        type="button"
+        onclick="window.print()"
+        class="btn btn-sm btn-outline-dark"
+    >
+        Print
+    </button>
+
+    <span class="text-muted small ms-auto">
+        Exports full lead database
+    </span>
+
 </div>
 
 
