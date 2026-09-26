@@ -13,7 +13,7 @@ $token = trim(
     ?? ''
 );
 
-$error = null;
+$error      = null;
 $validReset = null;
 
 
@@ -25,33 +25,26 @@ $validReset = null;
 
 if (
     $token === ''
-    || !preg_match(
-        '/^[a-f0-9]{64}$/',
-        $token
-    )
+    || !preg_match('/^[a-f0-9]{64}$/', $token)
 ) {
 
-    $error =
-        'This password reset link is invalid.';
+    $error = 'This password reset link is invalid.';
 
 } else {
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | HASH TOKEN
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
-    $tokenHash = hash(
-        'sha256',
-        $token
-    );
+    $tokenHash = hash('sha256', $token);
 
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | FIND RESET REQUEST
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     $stmt = db()->prepare("
@@ -78,17 +71,14 @@ if (
         LIMIT 1
     ");
 
-    $stmt->execute([
-        $tokenHash
-    ]);
+    $stmt->execute([$tokenHash]);
 
     $validReset = $stmt->fetch();
 
 
     if (!$validReset) {
 
-        $error =
-            'This password reset link has expired or has already been used.';
+        $error = 'This password reset link has expired or has already been used.';
     }
 }
 
@@ -106,50 +96,39 @@ if (
 
     verify_csrf();
 
-    $password =
-        $_POST['password'] ?? '';
-
-    $confirmPassword =
-        $_POST['confirm_password'] ?? '';
+    $password        = $_POST['password'] ?? '';
+    $confirmPassword = $_POST['confirm_password'] ?? '';
 
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | PASSWORD VALIDATION
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     if (strlen($password) < 12) {
 
-        $error =
-            'Your new password must contain at least 12 characters.';
+        $error = 'Your new password must contain at least 12 characters.';
 
-    } elseif (
-        $password !== $confirmPassword
-    ) {
+    } elseif ($password !== $confirmPassword) {
 
-        $error =
-            'The passwords do not match.';
+        $error = 'The passwords do not match.';
 
     } else {
 
         /*
-        |--------------------------------------------------------------------------
+        |------------------------------------------------------------------
         | HASH NEW PASSWORD
-        |--------------------------------------------------------------------------
+        |------------------------------------------------------------------
         */
 
-        $passwordHash =
-            password_hash(
-                $password,
-                PASSWORD_DEFAULT
-            );
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
 
         /*
-        |--------------------------------------------------------------------------
+        |------------------------------------------------------------------
         | TRANSACTION
-        |--------------------------------------------------------------------------
+        |------------------------------------------------------------------
         */
 
         db()->beginTransaction();
@@ -157,9 +136,9 @@ if (
         try {
 
             /*
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             | UPDATE PASSWORD
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             */
 
             $update = db()->prepare("
@@ -175,9 +154,9 @@ if (
 
 
             /*
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             | MARK TOKEN USED
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             */
 
             $used = db()->prepare("
@@ -186,15 +165,13 @@ if (
                 WHERE id = ?
             ");
 
-            $used->execute([
-                $validReset['reset_id']
-            ]);
+            $used->execute([$validReset['reset_id']]);
 
 
             /*
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             | INVALIDATE ALL OTHER RESET LINKS
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             */
 
             $invalidate = db()->prepare("
@@ -204,18 +181,16 @@ if (
                 AND used_at IS NULL
             ");
 
-            $invalidate->execute([
-                $validReset['user_id']
-            ]);
+            $invalidate->execute([$validReset['user_id']]);
 
 
             db()->commit();
 
 
             /*
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             | SUCCESS
-            |--------------------------------------------------------------------------
+            |--------------------------------------------------------------
             */
 
             set_flash(
@@ -232,8 +207,7 @@ if (
                 db()->rollBack();
             }
 
-            $error =
-                'The password could not be updated. Please try again.';
+            $error = 'The password could not be updated. Please try again.';
         }
     }
 }
@@ -249,8 +223,10 @@ if (
 
     <meta
         name="viewport"
-        content="width=device-width,initial-scale=1"
+        content="width=device-width,initial-scale=1,viewport-fit=cover"
     >
+
+    <meta name="theme-color" content="#111827">
 
     <title>
         Reset Password | SPL Lead Intelligence
@@ -263,18 +239,92 @@ if (
 
     <style>
 
+        html,
+        body {
+            height: 100%;
+        }
+
         body {
             min-height: 100vh;
+            min-height: 100dvh;
             background: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            -webkit-text-size-adjust: 100%;
         }
 
         .reset-container {
-            max-width: 560px;
+            width: 100%;
+            max-width: 520px;
         }
 
         .reset-card {
             border: 0;
             border-radius: 16px;
+        }
+
+        .reset-title {
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .reset-subtitle {
+            color: #6c757d;
+            font-size: 0.95rem;
+        }
+
+        /*
+         * iOS Safari zooms on input focus when font-size < 16px.
+         * Force form controls to 16px on small screens so the
+         * keyboard doesn't zoom the whole page.
+         */
+        @media (max-width: 575.98px) {
+
+            .form-control {
+                font-size: 16px;
+                min-height: 48px;
+            }
+
+            .btn {
+                min-height: 48px;
+                font-size: 16px;
+            }
+
+            .card-body {
+                padding: 1.5rem 1.25rem !important;
+            }
+
+            .reset-title {
+                font-size: 1.5rem;
+            }
+
+            .reset-subtitle {
+                font-size: 0.875rem;
+                margin-bottom: 1.25rem !important;
+            }
+
+            /*
+             * Bigger, easier-to-read help text on mobile —
+             * helps users understand the 12-char minimum.
+             */
+            .form-text {
+                font-size: 0.8125rem;
+            }
+        }
+
+        /*
+         * Safe-area inset for iPhone X+ notch/home indicator
+         */
+        @supports (padding: max(0px)) {
+
+            body {
+                padding-left: max(1rem, env(safe-area-inset-left));
+                padding-right: max(1rem, env(safe-area-inset-right));
+                padding-bottom: max(1rem, env(safe-area-inset-bottom));
+                padding-top: max(1rem, env(safe-area-inset-top));
+            }
         }
 
     </style>
@@ -283,134 +333,139 @@ if (
 
 <body>
 
-<div class="container py-5 reset-container">
+    <div class="reset-container">
 
-    <div class="card reset-card shadow-lg mt-5">
+        <div class="card reset-card shadow-lg">
 
-        <div class="card-body p-5">
+            <div class="card-body p-4 p-sm-5">
 
-            <h1 class="h3 fw-bold mb-2">
-                Reset Password
-            </h1>
-
-
-            <?php if ($error): ?>
-
-                <div class="alert alert-danger">
-
-                    <?= e($error) ?>
-
-                </div>
-
-            <?php endif; ?>
+                <h1 class="h3 reset-title mb-2">
+                    Reset Password
+                </h1>
 
 
-            <?php if ($validReset): ?>
+                <?php if ($error): ?>
 
-                <p class="text-muted mb-4">
+                    <div class="alert alert-danger">
+                        <?= e($error) ?>
+                    </div>
 
-                    Create a new password for
-
-                    <strong>
-                        <?= e($validReset['email']) ?>
-                    </strong>.
-
-                </p>
+                <?php endif; ?>
 
 
-                <form method="post">
+                <?php if ($validReset): ?>
 
-                    <?= csrf_field() ?>
+                    <p class="reset-subtitle mb-4">
 
-                    <input
-                        type="hidden"
-                        name="token"
-                        value="<?= e($token) ?>"
-                    >
+                        Create a new password for
 
+                        <strong>
+                            <?= e($validReset['email']) ?>
+                        </strong>.
+
+                    </p>
+
+
+                    <form method="post" novalidate>
+
+                        <?= csrf_field() ?>
+
+                        <input
+                            type="hidden"
+                            name="token"
+                            value="<?= e($token) ?>"
+                        >
+
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                New Password
+                            </label>
+
+                            <input
+                                type="password"
+                                name="password"
+                                class="form-control"
+                                minlength="12"
+                                autocomplete="new-password"
+                                required
+                            >
+
+                            <div class="form-text">
+                                Minimum 12 characters.
+                            </div>
+
+                        </div>
+
+
+                        <div class="mb-4">
+
+                            <label class="form-label">
+                                Confirm New Password
+                            </label>
+
+                            <input
+                                type="password"
+                                name="confirm_password"
+                                class="form-control"
+                                minlength="12"
+                                autocomplete="new-password"
+                                required
+                            >
+
+                        </div>
+
+
+                        <button
+                            type="submit"
+                            class="btn btn-dark w-100"
+                        >
+                            Change Password
+                        </button>
+
+                    </form>
+
+
+                <?php else: ?>
+
+                    <p class="reset-subtitle mb-4">
+
+                        The reset link you used is no longer valid.
+                        Request a new one to continue.
+
+                    </p>
 
                     <div class="mb-3">
 
-                        <label class="form-label">
-                            New Password
-                        </label>
-
-                        <input
-                            type="password"
-                            name="password"
-                            class="form-control"
-                            minlength="12"
-                            autocomplete="new-password"
-                            required
+                        <a
+                            href="forgot_password.php"
+                            class="btn btn-dark w-100"
                         >
-
-                        <div class="form-text">
-                            Minimum 12 characters.
-                        </div>
+                            Request Another Reset
+                        </a>
 
                     </div>
 
-
-                    <div class="mb-4">
-
-                        <label class="form-label">
-                            Confirm New Password
-                        </label>
-
-                        <input
-                            type="password"
-                            name="confirm_password"
-                            class="form-control"
-                            minlength="12"
-                            autocomplete="new-password"
-                            required
-                        >
-
-                    </div>
+                <?php endif; ?>
 
 
-                    <button
-                        type="submit"
-                        class="btn btn-dark w-100"
-                    >
-                        Change Password
-                    </button>
-
-                </form>
-
-
-            <?php else: ?>
-
-                <div class="mt-4">
+                <div class="text-center mt-4">
 
                     <a
-                        href="forgot_password.php"
-                        class="btn btn-dark w-100"
+                        href="login.php"
+                        class="text-decoration-none"
                     >
-                        Request Another Reset
+                        Back to Sign In
                     </a>
 
                 </div>
-
-            <?php endif; ?>
-
-
-            <div class="text-center mt-4">
-
-                <a
-                    href="login.php"
-                    class="text-decoration-none"
-                >
-                    Back to Sign In
-                </a>
 
             </div>
 
         </div>
 
     </div>
-
-</div>
 
 </body>
 

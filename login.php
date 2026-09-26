@@ -66,8 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <meta
         name="viewport"
-        content="width=device-width,initial-scale=1"
+        content="width=device-width,initial-scale=1,viewport-fit=cover"
     >
+
+    <meta name="theme-color" content="#111827">
 
     <title>
         SPL Lead Intelligence Login
@@ -80,13 +82,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <style>
 
+        html,
+        body {
+            height: 100%;
+        }
+
         body {
             min-height: 100vh;
+            min-height: 100dvh;
             background: #111827;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            -webkit-text-size-adjust: 100%;
         }
 
         .login-container {
-            max-width: 480px;
+            width: 100%;
+            max-width: 460px;
         }
 
         .login-card {
@@ -96,6 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .login-title {
             font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .login-subtitle {
+            color: #6c757d;
+            font-size: 0.95rem;
         }
 
         .forgot-link {
@@ -107,119 +127,165 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-decoration: underline;
         }
 
+        /*
+         * iOS Safari zooms on input focus when font-size < 16px.
+         * Force form controls to 16px on small screens so the
+         * keyboard doesn't zoom the whole page.
+         */
+        @media (max-width: 575.98px) {
+
+            .form-control {
+                font-size: 16px;
+                min-height: 48px;
+            }
+
+            .btn {
+                min-height: 48px;
+                font-size: 16px;
+            }
+
+            .card-body {
+                padding: 1.5rem 1.25rem !important;
+            }
+
+            .login-title {
+                font-size: 1.5rem;
+            }
+
+            .login-subtitle {
+                font-size: 0.875rem;
+                margin-bottom: 1.25rem !important;
+            }
+        }
+
+        /*
+         * Safe-area inset for iPhone X+ notch/home indicator
+         */
+        @supports (padding: max(0px)) {
+
+            body {
+                padding-left: max(1rem, env(safe-area-inset-left));
+                padding-right: max(1rem, env(safe-area-inset-right));
+                padding-bottom: max(1rem, env(safe-area-inset-bottom));
+                padding-top: max(1rem, env(safe-area-inset-top));
+            }
+        }
+
     </style>
 
 </head>
 
 <body>
 
-<div class="container py-5 login-container">
+    <div class="login-container">
 
-    <div class="card login-card shadow-lg mt-5">
+        <div class="card login-card shadow-lg">
 
-        <div class="card-body p-5">
+            <div class="card-body p-4 p-sm-5">
 
-            <h1 class="h3 login-title mb-1">
-                SPL Lead Intelligence
-            </h1>
+                <h1 class="h3 login-title mb-1">
+                    SPL Lead Intelligence
+                </h1>
 
-            <p class="text-muted mb-4">
-                Sales intelligence dashboard
-            </p>
-
-
-            <?php if ($error): ?>
-
-                <div class="alert alert-danger">
-
-                    <?= e($error) ?>
-
-                </div>
-
-            <?php endif; ?>
+                <p class="login-subtitle mb-4">
+                    Sales intelligence dashboard
+                </p>
 
 
-            <?php foreach (get_flashes() as $flash): ?>
+                <?php if ($error): ?>
 
-                <div
-                    class="alert alert-<?= e($flash['type']) ?>"
-                >
+                    <div class="alert alert-danger">
 
-                    <?= e($flash['message']) ?>
+                        <?= e($error) ?>
 
-                </div>
+                    </div>
 
-            <?php endforeach; ?>
+                <?php endif; ?>
 
 
-            <form method="post">
+                <?php foreach (get_flashes() as $flash): ?>
 
-                <?= csrf_field() ?>
-
-
-                <div class="mb-3">
-
-                    <label class="form-label">
-                        Email
-                    </label>
-
-                    <input
-                        class="form-control"
-                        type="email"
-                        name="email"
-                        autocomplete="email"
-                        required
+                    <div
+                        class="alert alert-<?= e($flash['type']) ?>"
                     >
 
-                </div>
+                        <?= e($flash['message']) ?>
+
+                    </div>
+
+                <?php endforeach; ?>
 
 
-                <div class="mb-2">
+                <form method="post" novalidate>
 
-                    <label class="form-label">
-                        Password
-                    </label>
+                    <?= csrf_field() ?>
 
-                    <input
-                        class="form-control"
-                        type="password"
-                        name="password"
-                        autocomplete="current-password"
-                        required
+
+                    <div class="mb-3">
+
+                        <label class="form-label">
+                            Email
+                        </label>
+
+                        <input
+                            class="form-control"
+                            type="email"
+                            name="email"
+                            autocomplete="email"
+                            inputmode="email"
+                            autocapitalize="none"
+                            autocorrect="off"
+                            spellcheck="false"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="mb-2">
+
+                        <label class="form-label">
+                            Password
+                        </label>
+
+                        <input
+                            class="form-control"
+                            type="password"
+                            name="password"
+                            autocomplete="current-password"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="text-end mb-4">
+
+                        <a
+                            href="forgot_password.php"
+                            class="forgot-link"
+                        >
+                            Forgot your password?
+                        </a>
+
+                    </div>
+
+
+                    <button
+                        class="btn btn-dark w-100"
+                        type="submit"
                     >
+                        Sign In
+                    </button>
 
-                </div>
+                </form>
 
-
-                <div class="text-end mb-4">
-
-                    <a
-                        href="forgot_password.php"
-                        class="forgot-link"
-                    >
-                        Forgot your password?
-                    </a>
-
-                </div>
-
-
-                <button
-                    class="btn btn-dark w-100"
-                    type="submit"
-                >
-                    Sign In
-                </button>
-
-            </form>
+            </div>
 
         </div>
 
     </div>
 
-</div>
-
 </body>
 
 </html>
-
-
