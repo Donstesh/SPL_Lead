@@ -20,7 +20,7 @@ return [
     ],
     
     'google' => [
-        'places_api_key' => 'AIzaSyBu4wiVdzW6P_V-JTlTmP-ofMhtP0wmA4M',
+        'places_api_key' => 'AIzaSyDyHbsG4uRSfpvojT6F9lVTlUoy6gkXkVQ',
     ],
 
 ];
