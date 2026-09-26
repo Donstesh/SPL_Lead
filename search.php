@@ -46,6 +46,9 @@ $minRating    = '';
 $minReviews   = '';
 $websiteFilter = 'any';
 
+$geocodedLat = null;
+$geocodedLng = null;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -116,21 +119,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             /*
             |--------------------------------------------------------------------------
-            | BUILD GOOGLE QUERY
+            | GEOCODE LOCATION
             |--------------------------------------------------------------------------
             |
-            | Example:
-            |
-            | Dentists within 10 miles of West London
+            | Converts "West London" into latitude/longitude so we can
+            | pass a proper location bias to the Places API.
             |
             */
 
-            $googleQuery =
-                $businessType
-                . ' within '
-                . $radiusMiles
-                . ' miles of '
-                . $locationText;
+            $coords = google_geocode($locationText);
+
+            $geocodedLat = $coords['lat'];
+            $geocodedLng = $coords['lng'];
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | BUILD GOOGLE QUERY
+            |--------------------------------------------------------------------------
+            |
+            | Keep the query clean. The radius is applied via locationBias,
+            | not by putting "within X miles" into the text.
+            |
+            */
+
+            $googleQuery = $businessType . ' in ' . $locationText;
 
 
             /*
@@ -139,9 +152,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             |--------------------------------------------------------------------------
             */
 
+            $radiusMetres = (float)$radiusMiles * 1609.34;
+
             $response = google_places_text_search(
                 $googleQuery,
-                null,
+                [
+                    'lat'           => $coords['lat'],
+                    'lng'           => $coords['lng'],
+                    'radius_metres' => $radiusMetres,
+                ],
                 20
             );
 
@@ -248,13 +267,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'radius_miles'   => $radiusMiles,
                 'min_rating'     => $minRating,
                 'min_reviews'    => $minReviews,
-                'website_filter' => $websiteFilter
+                'website_filter' => $websiteFilter,
+                'geocoded_lat'   => $geocodedLat,
+                'geocoded_lng'   => $geocodedLng,
             ];
 
-
-        } catch (Exception $e) {
-
-            $error = $e->getMessage();
 
         } catch (Throwable $e) {
 
@@ -648,6 +665,16 @@ require __DIR__ . '/includes/header.php';
                                 ? ''
                                 : 'es'
                             ?>
+
+                            <?php if ($geocodedLat !== null && $geocodedLng !== null): ?>
+
+                                &nbsp;·&nbsp;
+
+                                Centred on
+                                <?= e(number_format((float)$geocodedLat, 4)) ?>,
+                                <?= e(number_format((float)$geocodedLng, 4)) ?>
+
+                            <?php endif; ?>
 
                         </div>
 
@@ -1164,6 +1191,5 @@ document.addEventListener(
 );
 
 </script>
-
 
 <?php require __DIR__ . '/includes/footer.php'; ?>
