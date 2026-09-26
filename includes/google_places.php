@@ -22,37 +22,103 @@ function google_places_api_key(): string
 }
 
 /**
+ * Geocode a free-text location into latitude/longitude.
+ *
+ * @return array{lat: float, lng: float}|null
+ */
+function google_geocode(string $locationText): ?array
+{
+    $apiKey = google_places_api_key();
+
+    $url = 'https://maps.googleapis.com/maps/api/geocode/json?' . http_build_query([
+        'address'  => $locationText,
+        'region'   => 'gb',
+        'language' => 'en',
+        'key'      => $apiKey,
+    ]);
+
+    $ch = curl_init($url);
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT        => 20,
+    ]);
+
+    $body = curl_exec($ch);
+
+    if ($body === false) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new RuntimeException('Geocoding connection failed: ' . $error);
+    }
+
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $decoded = json_decode($body, true);
+
+    if (!is_array($decoded)) {
+        throw new RuntimeException('Geocoding returned invalid JSON.');
+    }
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        $message = $decoded['error_message']
+            ?? $decoded['status']
+            ?? ('Geocoding returned HTTP ' . $httpCode);
+
+        throw new RuntimeException('Geocoding error: ' . $message);
+    }
+
+    if (($decoded['status'] ?? '') !== 'OK') {
+        throw new RuntimeException(
+            'Could not find location "' . $locationText . '" ('
+            . ($decoded['status'] ?? 'unknown') . ').'
+        );
+    }
+
+    $first = $decoded['results'][0] ?? null;
+
+    if (!$first || !isset($first['geometry']['location']['lat'], $first['geometry']['location']['lng'])) {
+        throw new RuntimeException('Geocoding returned no usable coordinates.');
+    }
+
+    log_google_api_usage('geocode');
+
+    return [
+        'lat' => (float)$first['geometry']['location']['lat'],
+        'lng' => (float)$first['geometry']['location']['lng'],
+    ];
+}
+
+/**
  * Search Google Places (New) Text Search endpoint.
  *
- * @return array{places: array, nextPageToken: ?string}
+ * Automatically follows nextPageToken up to $maxPages, returning
+ * a combined list of all places found.
+ *
+ * Google caps Text Search (New) at roughly 60 results per query
+ * (3 pages of 20), so $maxPages above 3 has no effect.
+ *
+ * If a later page fails, whatever has been collected so far is
+ * returned — the search degrades gracefully rather than failing
+ * entirely.
+ *
+ * @return array{places: array, pages_fetched: int, total_available: int}
  */
 function google_places_text_search(
     string $textQuery,
-    ?string $pageToken = null,
-    int $pageSize = 20
+    ?array $locationRestriction = null,
+    int $pageSize = 20,
+    int $maxPages = 3
 ): array {
     $apiKey = google_places_api_key();
 
     $endpoint = 'https://places.googleapis.com/v1/places:searchText';
 
     $pageSize = max(1, min(20, $pageSize));
+    $maxPages = max(1, min(3, $maxPages));   // Google hard cap: ~3 pages
 
-    $payload = [
-        'textQuery' => $textQuery,
-        'pageSize' => $pageSize,
-        'languageCode' => 'en',
-        'regionCode' => 'GB',
-    ];
-
-    if ($pageToken !== null && $pageToken !== '') {
-        $payload['pageToken'] = $pageToken;
-    }
-
-    /*
-     * Important:
-     * Google bills according to fields requested.
-     * We request the business intelligence required by SPL Lead Intelligence.
-     */
     $fieldMask = implode(',', [
         'places.id',
         'places.displayName',
@@ -70,50 +136,127 @@ function google_places_text_search(
         'nextPageToken',
     ]);
 
-    $ch = curl_init($endpoint);
+    $allPlaces    = [];
+    $seenIds      = [];
+    $pageToken    = null;
+    $pagesFetched = 0;
 
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'X-Goog-Api-Key: ' . $apiKey,
-            'X-Goog-FieldMask: ' . $fieldMask,
-        ],
-    ]);
+    for ($page = 0; $page < $maxPages; $page++) {
 
-    $body = curl_exec($ch);
+        $payload = [
+            'textQuery'    => $textQuery,
+            'pageSize'     => $pageSize,
+            'languageCode' => 'en',
+            'regionCode'   => 'GB',
+        ];
 
-    if ($body === false) {
-        $error = curl_error($ch);
+        if ($locationRestriction !== null) {
+            $payload['locationBias'] = [
+                'circle' => [
+                    'center' => [
+                        'latitude'  => (float)$locationRestriction['lat'],
+                        'longitude' => (float)$locationRestriction['lng'],
+                    ],
+                    // Places API (New) caps circle radius at 50,000 metres.
+                    'radius' => (float)min(
+                        50000.0,
+                        (float)$locationRestriction['radius_metres']
+                    ),
+                ],
+            ];
+        }
+
+        if ($pageToken !== null && $pageToken !== '') {
+            $payload['pageToken'] = $pageToken;
+        }
+
+        $ch = curl_init($endpoint);
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'X-Goog-Api-Key: ' . $apiKey,
+                'X-Goog-FieldMask: ' . $fieldMask,
+            ],
+        ]);
+
+        $body = curl_exec($ch);
+
+        if ($body === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            if ($page === 0) {
+                throw new RuntimeException(
+                    'Google Places connection failed: ' . $error
+                );
+            }
+            break;
+        }
+
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        throw new RuntimeException('Google Places connection failed: ' . $error);
+
+        $decoded = json_decode($body, true);
+
+        if (!is_array($decoded)) {
+            if ($page === 0) {
+                throw new RuntimeException(
+                    'Google Places returned an invalid JSON response.'
+                );
+            }
+            break;
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $message = $decoded['error']['message']
+                ?? ('Google Places returned HTTP ' . $httpCode);
+
+            if ($page === 0) {
+                throw new RuntimeException($message);
+            }
+            break;
+        }
+
+        log_google_api_usage('places_text_search');
+
+        $places = $decoded['places'] ?? [];
+
+        foreach ($places as $place) {
+            $id = $place['id'] ?? null;
+
+            if ($id === null) {
+                continue;
+            }
+
+            if (isset($seenIds[$id])) {
+                continue;
+            }
+
+            $seenIds[$id] = true;
+            $allPlaces[]  = $place;
+        }
+
+        $pagesFetched++;
+
+        $pageToken = $decoded['nextPageToken'] ?? null;
+
+        if ($pageToken === null || $pageToken === '') {
+            break;
+        }
+
+        usleep(200000); // 200ms — avoids empty results on fresh tokens
     }
-
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $decoded = json_decode($body, true);
-
-    if (!is_array($decoded)) {
-        throw new RuntimeException('Google Places returned an invalid JSON response.');
-    }
-
-    if ($httpCode < 200 || $httpCode >= 300) {
-        $message = $decoded['error']['message']
-            ?? ('Google Places returned HTTP ' . $httpCode);
-
-        throw new RuntimeException($message);
-    }
-
-    log_google_api_usage('places_text_search');
 
     return [
-        'places' => $decoded['places'] ?? [],
-        'nextPageToken' => $decoded['nextPageToken'] ?? null,
+        'places'          => $allPlaces,
+        'pages_fetched'   => $pagesFetched,
+        'total_available' => count($allPlaces),
     ];
 }
 
